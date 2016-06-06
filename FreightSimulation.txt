@@ -1,0 +1,506 @@
+﻿Imports System
+Imports System.Text
+Imports System.Collections.Generic
+Imports System.IO
+Module Module1
+    Function ParkingProbability(currenttime As Integer, entertime As Integer, deliverytime As Integer, currentspot As Integer, deliveryspot As Integer, totalspots As Integer)
+        Dim timeinsim As Integer = currenttime - entertime
+        Dim distancefromSite As Integer = Math.Min(Math.Abs(deliveryspot - currentspot), (totalspots - Math.Abs(deliveryspot - currentspot)))
+        Randomize()
+        Dim ParkNumber As Double = Rnd()
+        Dim probzone4 As Double = 1 / 20000
+        Dim ProbZone3 As Double = 1 / 250 '10% chance
+        Dim probzone2 As Double = 1 / 45 '33 % chance
+        Dim probzone1 As Double = 1 / 20.5 '95% chance
+        'Console.WriteLine(ParkNumber)
+        'Console.WriteLine(distancefromSite)
+        If timeinsim >= 180 Then '30 minutes simulation time
+            Return 1.1
+        ElseIf distancefromSite <= 10 Then
+            If ParkNumber <= probzone1 Then
+                Return 1
+            End If
+        ElseIf distancefromSite <= 25 And distancefromSite > 10 Then
+            If ParkNumber <= probzone2 Then
+                Return 1
+            End If
+        ElseIf distancefromSite <= 50 And distancefromSite > 25 Then
+            If ParkNumber <= ProbZone3 Then
+                Return 1
+            End If
+        Else
+            If ParkNumber <= probzone4 Then
+                Return 1
+            End If
+        End If
+        'placeholder for real return
+        Return 0
+    End Function
+
+    Function formattime(time As Integer)
+        Dim timeasmin As Integer = time / 6
+        Dim formatted As Integer = 600 + (Math.Floor((timeasmin / 60)) * 100) + ((timeasmin) Mod 60)
+        Return formatted
+    End Function
+
+
+
+    Sub Main()
+        Dim Spotsfile As String 'Spotsfile is the entire text file with all data for all spots converted into one giant string'
+        Dim FileReadPath As String = "O" 'path to the csv file to be created later
+        Dim indicator As String = "O"
+        Dim filename As String
+        Dim filelocation1 As String = "O"
+        Dim filelocation2 As String = "O"
+
+        Do Until indicator.ToLower = "yes"
+            Console.WriteLine("Please provide a directory path to the needed route csv data file: ") ' for example: "C:\users\jon\desktop\enumerated full data.txt"
+            FileReadPath = Console.ReadLine()
+            Console.WriteLine("Does this look correct? " & FileReadPath & " (write YES or NO)")
+            indicator = Console.ReadLine()
+        Loop
+        indicator = "O"
+        'Creating the file to which data is written'
+        Do Until indicator.ToLower = "yes"
+            Console.WriteLine("Please Enter Directory information of the folder where you'd like the simulation data Stored: ")
+            filelocation1 = Console.ReadLine() '<-- will create filelocation in place typed
+            Console.WriteLine("Does this look correct? " & filelocation1 & " (write YES or NO)")
+            indicator = Console.ReadLine()
+        Loop
+
+        indicator = "O"
+        'The user must have permissions to the file they write to, otherwise it will come back as an error'
+        'Dim filelocation As String = "c:\users\jon\desktop\" '<-- example of hardcoded location
+        Do Until indicator.ToLower = "yes"
+            Console.WriteLine("Please enter desired filename: ")
+            filename = Console.ReadLine() & ".txt"
+            filelocation2 = filelocation1 & filename
+            Console.WriteLine("Does this look correct? " & filelocation2 & " (write YES or NO)")
+            indicator = Console.ReadLine()
+        Loop
+        Console.WriteLine(filelocation2)
+
+        Dim ParkFile As System.IO.StreamWriter 'creates file
+        ParkFile = My.Computer.FileSystem.OpenTextFileWriter(filelocation2, True)
+
+        'The file is stamped by current date/time and a header
+        ParkFile.Write(DateTime.Now, True)
+        ParkFile.Write(" Simulation Data", True)
+
+        'Creating A large array off of the spots data'
+        Spotsfile = My.Computer.FileSystem.ReadAllText(FileReadPath)
+        Dim Parse1() As String = Split(Spotsfile, vbCrLf) 'Parse1 is a 1 dimesional array, each entry is 1 line of the spots data text'
+        Dim Parse1Len As Integer = 0 'Parse1 length (how many lines aka how many spots there are) is crucial for final formatting
+        Dim parse2len As Integer = 0 'finding how many columns of data there are for each row
+        Dim x As Integer = 0
+        Dim Spots As String(,) 'Spots will be an array with all initial information stored'
+        Parse1Len = Parse1.GetLength(0) - 1
+        Dim parse2 As String() 'a general parse 2 can be iterated through to build the route array (see below)
+        Dim Parse2sample As String() 'Parse2sample gets how many different entries of information there are for one single spot 
+        Parse2sample = Split(Parse1(1), vbTab) 'a sample split is done for a single line to find the amount of columns needed
+        parse2len = Parse2sample.GetLength(0) - 1
+        ReDim Spots(Parse1Len, parse2len) 'Redimensions spots array to be the necessary size'
+        ' With a do until loop, the Spots directory can be created'
+        ' No matter how much information is given through the csv file, it will be split by line, then by tab, and put into a multidimensional array (# of spots = # of rows; # of info = # columns to each row)
+        Do Until x = Parse1Len
+            Dim num As Integer = 0
+            parse2 = Split(Parse1(x), vbTab)
+            Do Until num = parse2len
+                Spots(x, num) = parse2(num)
+                num += 1
+            Loop
+            x += 1
+        Loop
+
+        Console.WriteLine(Parse1.GetLength(0))
+        Console.Write(Spots.GetLength(0))
+        Console.ReadLine()
+        'For "Distance" Parameter, use spots as a count (each spot with an actual distance value) To do this accurately as well as give more accuracy to the simulation, things like corners and intersections need to be added as 'dummy spots'
+        ''Dummy spots' meaning they take space in the vector but are never able to be parked in
+        ' Arrays are not meant to be so dramatically redimensioned in visual basic, so the array must be packed into a list of list, which will then be redimensioned with insert function
+        'Creating a new list of lists, and a new temporary list. The list of lists will hold the spots data, the temporary list will be used to build the list of lists. 
+        Dim Spotslist As New List(Of List(Of String))
+        Dim Dummylist As New List(Of String)
+        Dim i As Integer = 0
+        Do Until i = UBound(Spots, 1) + 1
+            Dim templist As New List(Of String) 'In adding a list to another list, the added list (templist in this case) is a REFERENCE. So there needs to be a new "templist" created so that the list of lists works
+            templist.Add(Spots(i, 0))
+            templist.Add(Spots(i, 1))
+            templist.Add(Spots(i, 2))
+            templist.Add(Spots(i, 3))
+            templist.Add(Spots(i, 4))
+            templist.Add(Spots(i, 5))
+            templist.Add(Spots(i, 6))
+            templist.Add(Spots(i, 7))
+            templist.Add(Spots(i, 8))
+            Spotslist.Add(templist)
+            i += 1
+
+            If i + 1 < UBound(Spots, 1) Then
+                If Spots(i, 1) & Spots(i, 2) & Spots(i, 3) <> Spots(i + 1, 1) & Spots(i + 1, 2) & Spots(i + 1, 3) Then
+                    Dummylist.Add(i + 1)                            'Creating a list of where the dummy spots need to be inserted by iterating through spots
+                End If
+            End If
+        Loop
+
+        'The list index and first entry of each index signifies the number of the spot. So Spotslist(0)(0) is spot 0, etc...
+        'Now with a list created, the entries can be cross checked and a dummy spot can be inserted where needed without taking up much memory. To find where the list needs to be modified, one could iterate through the list and compare those or
+        'use the pre existing array, and create a "cheat sheet" of where exactly the dummy spots need to be added (this option takes less memory/power)
+
+        'For each number (stored as string) that represents a shift from block to block, create a dummy spot value list for that index and insert it into the spots list. Later the spots list is turned back into an array so the simulation can iterate through it. 
+
+        Dim IntInsert As Integer 'integer value that takes on insert volumes
+        For Each item In Dummylist 'dummy list is all the locations in the route where there is a change in block location meaning an intersection or turn
+            IntInsert = CInt(item) 'turning string into integer
+            Dim templist As New List(Of String)
+            templist.Add(item) 'First Dummy Spot Entry: Spot Index
+            templist.Add("Non Parking")
+            templist.Add("Non Parking")
+            templist.Add("Non Parking")
+            templist.Add("Non Parking")
+            templist.Add("Non Parking")
+            templist.Add("Non Parking")
+            templist.Add("Non Parking")
+            Spotslist.Insert(IntInsert, templist) 'dummy spot now created and inserted into the route where it appropriately should be
+
+        Next
+
+        'After having a list array that has all the values given in the file AND all the dummy values, create a new array for the simulation. It must have Spot #, Spot Free State, and Spot Location
+        i = 0
+        Dim FinalSpots(Spotslist.Count(), 2)
+        Do Until i = Spotslist.Count()
+            FinalSpots(i, 0) = i
+            If Spotslist(i)(2) = "Non Parking" Then 'making sure all the transition "spots" that represent intersections or turns are not counted as valid parking
+                FinalSpots(i, 1) = 1
+                FinalSpots(i, 2) = "Non Parking at " & Spotslist(i - 1)(1) & " between " & Spotslist(i - 1)(2) & " and " & Spotslist(i - 1)(3) & " and " & Spotslist(i + 1)(1) & " between " & Spotslist(i + 1)(2) & " and " & Spotslist(i + 1)(3)
+            Else
+                FinalSpots(i, 1) = 0
+                FinalSpots(i, 2) = Spotslist(i)(1) & " between " & Spotslist(i)(2) & " and " & Spotslist(i)(3)
+            End If
+            i += 1
+        Loop
+
+        'To check final spots values
+        Console.WriteLine("FinalSpots Check")
+        Console.WriteLine(FinalSpots.GetLength(0))
+        Console.Read()
+
+        'FinalSpots is an array that includes every spot given in the original file plus the dummy spots the represent intersections,corners, and etc.. It sets all eligible non dummy spots to be able to be parked in
+        'A function determining whether a spot is valuable or not will be added later to fix the issue of a truck parking in the first spot it sees regardless of distance from delivery / other factors
+        'Each entry in finalspots has 3 pieces of information: what spot it is, if the spot is free, and where the spot is located
+
+
+        Console.WriteLine("How many Receivers in simulation?: ")
+        Dim checkReceiversNum As String = Console.ReadLine()
+        Dim ReceiversNum As Integer
+        Do Until Integer.TryParse(checkReceiversNum, ReceiversNum) = True ' making sure the entry is correct aka that the user just entered a simple number and didn't add anything like "minutes" or "hours" to it
+            Console.WriteLine("How many Receivers in simulation?: ")
+            checkReceiversNum = Console.ReadLine()
+        Loop
+        ReceiversNum = CInt(checkReceiversNum)
+
+
+        'Creates an array containing four pieces of information for receivers. Number of receiver, location by number along route, how many trucks are going to deliver to there, and a place for probability to be placed (explained further down in code)
+        Dim n As Integer = 0
+        Dim numberoftrucks As Integer
+        Dim receivers(ReceiversNum - 1, 3)
+
+        Do Until n = ReceiversNum
+            Console.WriteLine("What Spot along route is receiver " & n + 1 & "?")
+            Dim Spot As Integer
+            Dim check1 As String = Console.ReadLine()
+            Do Until Integer.TryParse(check1, Spot) = True
+                Console.WriteLine("What Spot along route is receiver " & n + 1 & "?")
+                check1 = Console.ReadLine()
+            Loop
+            Spot = CInt(check1)
+            receivers(n, 0) = n + 1
+            receivers(n, 1) = Spot
+
+            'Figuring out how many trucks are delivering to each route
+            Dim TruckstoReceiver As Integer
+            Console.WriteLine("How many trucks are delivering to receiver " & n + 1 & "?")
+            Dim check2 As String = Console.ReadLine()
+            Do Until Integer.TryParse(check2, TruckstoReceiver) = True
+                Console.WriteLine("How many trucks are delivering to receiver " & n + 1 & "?")
+                check2 = Console.ReadLine()
+            Loop
+            TruckstoReceiver = CInt(check2)
+            receivers(n, 2) = TruckstoReceiver
+            numberoftrucks += TruckstoReceiver
+
+
+            receivers(n, 3) = 0
+            n += 1
+        Loop
+
+
+        Dim trucks(numberoftrucks) As Integer 'creates a 1 dimensional array that will hold all distributed enter times at first unsorted but then sorted.
+        ''ALL TRUCK ENTER TIMES ARE IN MINUTES: IF THE SIMULATION TIME IS CHANGED TO NOT BE 1 SIM TIME = 10 SECONDS, THE TRUCKNUMBERS MUST BE ADJUSTED ACCORDINGLY
+        Randomize()
+        Dim trucknumber As Integer = 0
+        Dim check As Single
+        Do Until trucknumber = Math.Floor(numberoftrucks * 0.4)
+            check = Rnd()
+            If check <= 0.45 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + 0
+            ElseIf check > 0.45 And check <= 0.75 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (120 * 6)
+            ElseIf check > 0.75 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (240 * 6)
+            End If
+            'Console.WriteLine(trucknumber & "check 1")
+            'Console.ReadLine()
+            trucknumber += 1
+        Loop
+
+        Do Until trucknumber = Math.Floor(numberoftrucks * 0.75)
+            check = Rnd()
+            If check <= 0.25 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (360 * 6)
+            ElseIf 0.25 < check And check <= 0.6 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (480 * 6)
+            ElseIf 0.6 < check And check <= 0.75 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (600 * 6)
+            ElseIf check > 0.75 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (720 * 6)
+            End If
+            'Console.WriteLine(trucknumber & "check 2")
+            'Console.ReadLine()
+            trucknumber += 1
+        Loop
+
+        Do Until trucknumber = numberoftrucks + 1
+            check = Rnd()
+            If CDbl(check) <= 0.15 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (840 * 6)
+            ElseIf 0.15 < check And check <= 0.3 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (960 * 6)
+            ElseIf 0.3 < check And check <= 0.5 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (1080 * 6)
+            ElseIf 0.5 < check And check <= 0.75 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (1200 * 6)
+            ElseIf check > 0.75 Then
+                trucks(trucknumber) = CInt(Math.Floor(120 * 6 * Rnd())) + (1319 * 6)
+            End If
+            'Console.WriteLine(trucknumber & "check 3")
+            'Console.ReadLine()
+            trucknumber += 1
+        Loop
+
+        Array.Sort(trucks) 'the array is now in order of earliest enter time to latest enter time
+
+        'Asking User how many delivery sites there are
+
+        Console.WriteLine(trucknumber)
+        Console.ReadLine()
+        Dim truckinfo(numberoftrucks, 10) 'builds a truck array
+        Dim counterfortruck As Integer = 0
+        Do Until counterfortruck = numberoftrucks
+            truckinfo(counterfortruck, 0) = trucks(counterfortruck) 'Enter Time
+            truckinfo(counterfortruck, 1) = -1 'Park State
+            truckinfo(counterfortruck, 2) = 120 ' Delivery Time (in 10 second intervals)
+            truckinfo(counterfortruck, 3) = -1 ' Parking Spot
+            truckinfo(counterfortruck, 4) = -1 'Time truck parks
+            truckinfo(counterfortruck, 5) = -1 'Time delivery was finished
+            truckinfo(counterfortruck, 6) = 0 'Did the truck double park or not?
+            truckinfo(counterfortruck, 7) = trucks(counterfortruck) 'This is the alterable enter state! It allows trucks to circle around the delivery radius without messing up their enter time in the outputted file
+            truckinfo(counterfortruck, 8) = counterfortruck 'Shows number of truck in simulation
+            truckinfo(counterfortruck, 9) = 0 'empty placeholder to be updated with spot in route where delivery must be made
+            truckinfo(counterfortruck, 10) = -1 'placeholder for the number of the site
+            'Console.WriteLine(counterfortruck & "check 4")
+            ' Console.ReadLine()
+            counterfortruck += 1
+        Loop
+
+
+
+        ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''' Site Assignment and Randomization ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+        'The purpose of the code below is to properly distribute trucks to receivers to fulfill the user provided information while still keeping the simulation random. If the user says 300 of 1000 trucks are to deliver to some site A, those 300 trucks 
+        '   are to be randomly distributed within the time range of the simulation. In the future, it is possible to provide the user more opportunity to provide information about likelihood of a truck delivering its specific cargo within some segment of time
+        '   of the simulation, though it requires some advanced reworking of code. 
+
+
+
+        'Using probabilities to properly distribute trucks in values equal to the given values, where the chance of a truck being assigned to a certain receiver is equal to the total number of trucks said to deliver there divided by total number of trucks in entire sim
+        n = 0
+        Do Until n = ReceiversNum
+            ' Using probability to properly compare numbers to randomly generated values between 0 and 1 such that the distribution matches the given number of trucks for each receives
+            receivers(n, 3) = CDbl(receivers(n, 2) / numberoftrucks)
+            n += 1
+        Loop
+
+        'takes a single truck, iterates through probabilities for receivers, finds which receiver the truck will deliver to by comparing cumulative probabilities of each receiver to a randomly generated value between 0 and 1, then continues to the next truck, iterating through all trucks in sim. 
+        n = 0
+        Dim p2 As Integer = 0
+        Dim p As Integer = 0
+        Dim Check3 As Single
+        Randomize()
+        Do Until p = ReceiversNum 'covers all given receivers
+            Do Until p2 = receivers(p, 2) 'until the number of trucks assigned to a receiver is equal to the user given amount
+                Check3 = Rnd()
+                If Check3 <= receivers(p, 3) Then 'if the random value is within the probability of a truck being assigned to that spot
+                    If truckinfo(n, 10) = -1 Then 'if the truck has not been assigned a receiver
+                        truckinfo(n, 9) = receivers(p, 1) 'truck given route spot of receiver
+                        truckinfo(n, 10) = receivers(p, 0) ' truck given number of receiver
+                        p2 += 1
+                    End If
+                End If
+                n += 1 'moves to next truck
+                If n = numberoftrucks Then 'if this goes all the way through the truck list it will loop around 
+                    n = 0
+                End If
+            Loop
+            n = 0
+            p2 = 0 'sets back to 0 for the next receiver
+            p += 1
+        Loop
+
+        ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+        Console.WriteLine()
+        Console.WriteLine("Enter Length of Simulation (1 = 1 hour): ") 'Allows user to choose length of simulation, while checking that an integer is given
+        Dim checksimtime As String = Console.ReadLine()
+        Dim SimTime As Integer
+        Do Until Integer.TryParse(checksimtime, SimTime) = True ' making sure the entry is correct aka that the user just entered a simple number and didn't add anything like "minutes" or "hours" to it
+            Console.WriteLine("Enter Length of Simulation (1 = 1 hour): ")
+            checksimtime = Console.ReadLine()
+        Loop
+        SimTime = CInt(checksimtime) * 60 * 6 ' 1 sim time currently 10seconds: x hours multiplied by 60 to convert to minutes multipled by 6 10 sec intervals per minute
+
+        ''Actual Simulation Code''
+
+        Dim T As Integer = 0
+        Dim trucklistDATA As New List(Of Array)
+        Dim TruckCount As Integer = 0 'Allows trucks to be numbered by when they entered the simulation
+        Dim num2 As Integer = 0 'num2 will be the variable counter that allows us at each time T to cycle through all current trucks within simulation 
+
+
+
+
+
+        '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''Simulation Start'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+        Console.WriteLine(FinalSpots.GetLength(0))
+        Console.ReadLine()
+        Dim totalspots As Integer = FinalSpots.GetLength(0) - 1
+        Do Until T = SimTime + 1 'until the clock has run through for total sim time, by nature of the counter adding without the +1 it will end at time - 1
+            'Console.WriteLine("Time is " & T)
+
+            'entering trucks in the sim
+            'however if not all trucks are in sim, and the enter time of the "queued" truck (next in array) is the simulation time, it needs to enter
+            If TruckCount <= truckinfo.GetLength(0) - 1 Then
+                Do Until truckinfo(TruckCount, 0) <> T 'this provision allows trucks to enter at the same time
+                    truckinfo(TruckCount, 1) = 0 'truck park state goes from -1 (not in sim) to 0 (in sim and moving)
+                    'Console.WriteLine("truck " & TruckCount & " has entered")
+                    TruckCount += 1 'total number of trucks in the simulation grows by 1
+                    If TruckCount > truckinfo.GetLength(0) - 1 Then
+                        Exit Do
+                    End If
+                Loop
+            End If
+
+            'parking/delivery/moving of trucks
+            num2 = 0
+            Do Until num2 = TruckCount
+                'Allowing Trucks to go through a route multiple times
+                If T - truckinfo(num2, 7) = totalspots And truckinfo(num2, 1) = 0 Then 'If the truck gets through the entire route without parking, the "enter time" is reset
+                    truckinfo(num2, 7) += totalspots 'This allows the truck to loop back through the route; for example, if there are 10 spots, T = 11, and the truck entered at 0, (T - Enter Time) = 11, meaning the truck would check to park in a spot that doesn't exist. However by adding the amount of spots to the enter time (T - Enter Time) = 1, meaning the truck is back at the first spot.
+                    'Console.WriteLine("Truck " & truckinfo(num2, 8) & " HAS CIRCLED AROUND")
+                    ' Console.WriteLine(truckinfo(num2, 0))
+                    'Console.WriteLine(truckinfo(num2, 1))
+                    ' Console.WriteLine(truckinfo(num2, 2))
+                    'Console.WriteLine(truckinfo(num2, 3))
+                    'Console.WriteLine(truckinfo(num2, 4))
+                    'Console.WriteLine(truckinfo(num2, 6))
+                    'Console.WriteLine(truckinfo(num2, 7))
+                    'Console.WriteLine(num2)
+                    'Console.WriteLine("T = " & T)
+                    'Console.ReadLine()
+                End If
+
+                'Checking Trucks done with delivery
+                If truckinfo(num2, 1) = 1 Then 'if the truck is already parked (parkstate = 1)
+                    'Console.WriteLine("Is " & truckinfo(num2, 8) & " done with delivery?")
+                    'Console.WriteLine(truckinfo(num2, 0))
+                    'Console.WriteLine(truckinfo(num2, 1))
+                    'Console.WriteLine(truckinfo(num2, 2))
+                    'Console.WriteLine(truckinfo(num2, 3))
+                    'Console.WriteLine(truckinfo(num2, 4))
+                    'Console.WriteLine(truckinfo(num2, 6))
+                    'Console.WriteLine(truckinfo(num2, 7))
+                    'Console.WriteLine("T = " & T)
+                    'Console.WriteLine("Delivery Finished at Time = " & truckinfo(num2, 2))
+                    'Console.WriteLine(truckinfo(num2, 5))
+                    If T = truckinfo(num2, 2) Then 'If the delivery time (modified to reflect what T will be at end of delivery) is equal to T (aka done)
+                        truckinfo(num2, 1) += 1 'Truck is post delivery
+                        FinalSpots(truckinfo(num2, 3), 1) = 0 'sets spot back to free
+                        truckinfo(num2, 5) += T + 1 'formattime(T)
+                        'Console.WriteLine(truckinfo(num2, 5))
+                    End If
+                End If
+
+
+                If truckinfo(num2, 1) = 0 Then ' if the truck is on the move
+                    If FinalSpots((T - truckinfo(num2, 7)), 1) = 0 Then 'If the spot the truck is at is free then (spot where truck is = time of sim - enter time; assumption is that it takes 1 minute for each truck to move a spot forward)
+                        If ParkingProbability(T, truckinfo(num2, 0), truckinfo(num2, 2), FinalSpots((T - truckinfo(num2, 7)), 0), truckinfo(num2, 9), totalspots) = 1 Then 'Use original unchanged enter time in function, as it will accurately reflect the time truck has spent in sim while the 7th parameter is used as a locator for the spot
+                            truckinfo(num2, 1) = 1
+                            truckinfo(num2, 2) += T
+                            FinalSpots((T - truckinfo(num2, 7)), 1) = 1
+                            truckinfo(num2, 3) = FinalSpots((T - truckinfo(num2, 7)), 0)
+                            truckinfo(num2, 4) = T
+                        ElseIf ParkingProbability(T, truckinfo(num2, 0), truckinfo(num2, 2), FinalSpots((T - truckinfo(num2, 7)), 0), truckinfo(num2, 9), totalspots) = 1.1 Then
+                            truckinfo(num2, 1) = 1
+                            truckinfo(num2, 2) += T
+                            FinalSpots((T - truckinfo(num2, 7)), 1) = 1
+                            truckinfo(num2, 3) = FinalSpots((T - truckinfo(num2, 7)), 0)
+                            truckinfo(num2, 4) = T
+                            truckinfo(num2, 6) = 1
+                        End If
+                    ElseIf T - truckinfo(num2, 0) = 180 Then
+                        truckinfo(num2, 1) = 1
+                        truckinfo(num2, 2) += T
+                        FinalSpots((T - truckinfo(num2, 7)), 1) = 1
+                        truckinfo(num2, 3) = FinalSpots((T - truckinfo(num2, 7)), 0)
+                        truckinfo(num2, 4) = T
+                        truckinfo(num2, 6) = 1
+                    End If
+                End If
+
+                num2 += 1
+            Loop
+
+            T += 1 'timer initializes'
+
+
+
+        Loop
+
+
+
+        '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''FINAL RESULTS AND WRITING TO FILE'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+        ''before the file was written as the simulation goes, however its easier to understand and code if the file is written with the proper information after the simulation finishes
+
+        ParkFile.WriteLine("Time of Simulation: " & (SimTime) / 6 / 60 & " hours")
+        ParkFile.WriteLine()
+        ParkFile.WriteLine("Truck ID, EnterTime, Receiver Number, Receiver Spot Location, ParkTime, Spot, SpotLocation, DeliveryFinishTime, DoublePark?")
+        Dim checkdata As Integer = 0
+        Do Until checkdata = truckinfo.GetLength(0)
+            If truckinfo(checkdata, 4) <> -1 Then 'if truck parked somewhere or was parked somewhere during the simulation before finishing delivery
+                '600 + CInt(Math.Floor((truckinfo(checkdata, 0) * 100 / 60) - (T Mod 60)/60 * 100) + CInt(truckinfo(checkdata, 0) Mod 60)) > 2400 Then
+                'ParkFile.WriteLine((700 + CInt(Math.Floor((truckinfo(checkdata, 0) / 60) - (T Mod 60)) * 100 + CInt(truckinfo(checkdata, 0) Mod 60))) - 2400 & ", " & truckinfo(checkdata, 4) & ", " & truckinfo(checkdata, 3) & ", " & FinalSpots(truckinfo(checkdata, 3), 2) & ", " & truckinfo(checkdata, 5))
+                'Else
+                'ParkFile.WriteLine(600 + Math.Floor(((truckinfo(checkdata,0) * 10) / 60) * 100 - (((truckinfo(checkdata,0) * 10) Mod 60) * 100) / 60) + Math.Floor((((Truckinfo(checkdata, 0) / 6) Mod 60)) & ", " & truckinfo(checkdata, 4) & ", " & truckinfo(checkdata, 3) & ", " & FinalSpots(truckinfo(checkdata, 3), 2) & ", " & truckinfo(checkdata, 5))
+                'End If
+                ParkFile.WriteLine((truckinfo(checkdata, 8) & "," & formattime(truckinfo(checkdata, 0))) & ", " & truckinfo(checkdata, 10) & "," & truckinfo(checkdata, 9) & "," & formattime(truckinfo(checkdata, 4)) & "," & truckinfo(checkdata, 3) & "," & FinalSpots(truckinfo(checkdata, 3), 2) & "," & formattime((truckinfo(checkdata, 5))) & "," & truckinfo(checkdata, 6))
+            Else 'if the truck never parked (doesn't have information for spot location so the location is appended as "-"
+                ParkFile.WriteLine((truckinfo(checkdata, 8) & "," & formattime(truckinfo(checkdata, 0))) & "," & truckinfo(checkdata, 10) & "," & truckinfo(checkdata, 9) & "," & truckinfo(checkdata, 4) & ", -" & ", -" & "," & (truckinfo(checkdata, 5)) & "," & truckinfo(checkdata, 6))
+                ' End If 
+            End If
+            checkdata += 1
+        Loop
+        ParkFile.WriteLine()
+        ParkFile.WriteLine(DateTime.Now, True)
+        'Writing to the file: Line separates trucks, data is comma delimited, truck ID, enter time, receiver #, receiver location, time parked, spot it parked, spot location, when delivery was finished, if the vehicle double parked
+        ParkFile.Close()
+    End Sub
+End Module
